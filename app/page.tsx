@@ -66,16 +66,8 @@ export default function Home() {
             (baselineMax && newCount === 0))
         ) {
           const deletedCount = (baselineCount !== null ? baselineCount : 0) - newCount;
-          const deletedTime = new Date().toLocaleString('en-US', {
-            month: 'short',
-            day: 'numeric',
-            year: 'numeric',
-            hour: 'numeric',
-            minute: '2-digit',
-            hour12: true,
-          });
           const effectiveDeleted = deletedCount > 0 ? deletedCount : 1;
-          setDeletionMessage(`${effectiveDeleted} item${effectiveDeleted > 1 ? 's' : ''} deleted from the sheet at ${deletedTime}.`);
+          setDeletionMessage(`${effectiveDeleted} item${effectiveDeleted > 1 ? 's' : ''} deleted from the sheet.`);
         }
 
         // Update stored baseline values so future checks compare against latest
@@ -136,15 +128,7 @@ export default function Home() {
         } else {
           const effectiveDeleted = (baselineCount !== null ? baselineCount : (baselineMax ? 1 : 0)) - newCount;
           const deletedCount = effectiveDeleted > 0 ? effectiveDeleted : 1;
-          const deletedTime = new Date().toLocaleString('en-US', {
-            month: 'short',
-            day: 'numeric',
-            year: 'numeric',
-            hour: 'numeric',
-            minute: '2-digit',
-            hour12: true,
-          });
-          setDeletionMessage(`${deletedCount} item${deletedCount > 1 ? 's' : ''} deleted from the sheet at ${deletedTime}.`);
+          setDeletionMessage(`${deletedCount} item${deletedCount > 1 ? 's' : ''} deleted from the sheet.`);
           if (baselineKey) localStorage.setItem('feedbackDeletionNotified', baselineKey);
         }
       }
