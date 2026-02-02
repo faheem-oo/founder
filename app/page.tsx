@@ -10,6 +10,9 @@ export default function Home() {
   const [feedbackItems, setFeedbackItems] = useState<{ timestamp: string; feedback: string }[]>([]);
   const [loadingFeedback, setLoadingFeedback] = useState(false);
   const [feedbackError, setFeedbackError] = useState('');
+  const [deletionMessage, setDeletionMessage] = useState('');
+  const [previousCount, setPreviousCount] = useState<number | null>(null);
+  const [previousMaxTimestamp, setPreviousMaxTimestamp] = useState<string | null>(null);
 
   // Trigger the background animation after the form entrance animation finishes.
   useEffect(() => {
@@ -19,9 +22,79 @@ export default function Home() {
     return () => clearTimeout(t);
   }, []);
 
+  // Load previous count from localStorage on mount
+  useEffect(() => {
+    const stored = localStorage.getItem('feedbackCount');
+    if (stored) {
+      setPreviousCount(parseInt(stored, 10));
+    }
+    const storedMax = localStorage.getItem('feedbackMaxTimestamp');
+    if (storedMax) setPreviousMaxTimestamp(storedMax);
+  }, []);
+
+  // Background check: fetch current feedback count & latest timestamp on mount to detect deletions
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        const response = await fetch('/api/feedback', { cache: 'no-store' });
+        if (!response.ok) return;
+        const res = await response.json();
+        const newItems = res.items ?? [];
+        const newCount = newItems.length;
+        // compute newest timestamp (items are expected sorted desc, but compute defensively)
+        const newMax = newItems.reduce((acc: string | null, it: { timestamp: string }) => {
+          if (!it?.timestamp) return acc;
+          if (!acc) return it.timestamp;
+          return acc > it.timestamp ? acc : it.timestamp;
+        }, null as string | null);
+
+        const stored = localStorage.getItem('feedbackCount');
+        const storedCount = stored ? parseInt(stored, 10) : null;
+        const storedMax = localStorage.getItem('feedbackMaxTimestamp');
+
+
+        const baselineCount = storedCount;
+        const baselineMax = storedMax || null;
+
+        // Deletion detection: if count decreased OR latest timestamp is older/missing
+        if (
+          mounted &&
+          ((baselineCount !== null && baselineCount > 0 && newCount < baselineCount) ||
+            (baselineMax && newMax && newMax < baselineMax) ||
+            (baselineMax && newCount === 0))
+        ) {
+          const deletedCount = (baselineCount !== null ? baselineCount : 0) - newCount;
+          const deletedTime = new Date().toLocaleString('en-US', {
+            month: 'short',
+            day: 'numeric',
+            year: 'numeric',
+            hour: 'numeric',
+            minute: '2-digit',
+            hour12: true,
+          });
+          const effectiveDeleted = deletedCount > 0 ? deletedCount : 1;
+          setDeletionMessage(`${effectiveDeleted} item${effectiveDeleted > 1 ? 's' : ''} deleted from the sheet at ${deletedTime}.`);
+        }
+
+        // Update stored baseline values so future checks compare against latest
+        localStorage.setItem('feedbackCount', newCount.toString());
+        if (newMax) localStorage.setItem('feedbackMaxTimestamp', newMax);
+        if (mounted) {
+          setPreviousCount(newCount);
+          if (newMax) setPreviousMaxTimestamp(newMax);
+        }
+      } catch (e) {
+        // ignore background errors
+      }
+    })();
+    return () => { mounted = false; };
+  }, []);
+
   const handleViewFeedback = async () => {
     setLoadingFeedback(true);
     setFeedbackError('');
+    setDeletionMessage('');
     try {
       const response = await fetch('/api/feedback', { cache: 'no-store' });
       const res = await response.json();
@@ -30,7 +103,47 @@ export default function Home() {
         setFeedbackError('Failed to load feedback.');
         return;
       }
-      setFeedbackItems(res.items ?? []);
+      const newItems = res.items ?? [];
+      const newCount = newItems.length;
+      const newMax = newItems.reduce((acc: string | null, it: { timestamp: string }) => {
+        if (!it?.timestamp) return acc;
+        if (!acc) return it.timestamp;
+        return acc > it.timestamp ? acc : it.timestamp;
+      }, null as string | null);
+
+      const stored = localStorage.getItem('feedbackCount');
+      const storedCount = stored ? parseInt(stored, 10) : null;
+      const storedMax = localStorage.getItem('feedbackMaxTimestamp');
+
+
+      const baselineCount = previousCount ?? storedCount;
+      const baselineMax = previousMaxTimestamp ?? storedMax ?? null;
+
+      // Detect if data was deleted: count decreased OR latest timestamp older/removed
+      if (
+        baselineCount !== null && baselineCount > 0 && newCount < baselineCount ||
+        (baselineMax && newMax && newMax < baselineMax) ||
+        (baselineMax && newCount === 0)
+      ) {
+        const effectiveDeleted = (baselineCount !== null ? baselineCount : (baselineMax ? 1 : 0)) - newCount;
+        const deletedCount = effectiveDeleted > 0 ? effectiveDeleted : 1;
+        const deletedTime = new Date().toLocaleString('en-US', {
+          month: 'short',
+          day: 'numeric',
+          year: 'numeric',
+          hour: 'numeric',
+          minute: '2-digit',
+          hour12: true,
+        });
+        setDeletionMessage(`${deletedCount} item${deletedCount > 1 ? 's' : ''} deleted from the sheet at ${deletedTime}.`);
+      }
+      
+      setFeedbackItems(newItems);
+      setPreviousCount(newCount);
+      if (newMax) setPreviousMaxTimestamp(newMax);
+      // Save count and max timestamp to localStorage
+      localStorage.setItem('feedbackCount', newCount.toString());
+      if (newMax) localStorage.setItem('feedbackMaxTimestamp', newMax);
       setViewerOpen(true);
     } catch (err: any) {
       setFeedbackError(err?.message ?? 'Failed to load feedback.');
@@ -100,6 +213,14 @@ export default function Home() {
                 {feedbackError}
               </div>
             )}
+
+            {deletionMessage && (
+              <div className="text-sm text-yellow-300 bg-yellow-900/40 border border-yellow-500/40 rounded-lg px-3 py-2">
+                ⚠️ {deletionMessage}
+              </div>
+            )}
+
+            
 
             {feedbackItems.length === 0 && !feedbackError && (
               <p className="text-white/70 text-sm">No feedback yet.</p>
