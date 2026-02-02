@@ -4,6 +4,9 @@ const nextConfig: NextConfig = {
   images: {
     unoptimized: true,
   },
+  compiler: {
+    styledComponents: true,
+  },
   // Ensure Next.js treats this folder as the workspace root
   turbopack: {
     root: __dirname,
