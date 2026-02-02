@@ -53,6 +53,7 @@ export default function Home() {
         const storedCount = stored ? parseInt(stored, 10) : null;
         const storedMax = localStorage.getItem('feedbackMaxTimestamp');
 
+        
 
         const baselineCount = storedCount;
         const baselineMax = storedMax || null;
@@ -115,6 +116,7 @@ export default function Home() {
       const storedCount = stored ? parseInt(stored, 10) : null;
       const storedMax = localStorage.getItem('feedbackMaxTimestamp');
 
+      
 
       const baselineCount = previousCount ?? storedCount;
       const baselineMax = previousMaxTimestamp ?? storedMax ?? null;
@@ -125,17 +127,26 @@ export default function Home() {
         (baselineMax && newMax && newMax < baselineMax) ||
         (baselineMax && newCount === 0)
       ) {
-        const effectiveDeleted = (baselineCount !== null ? baselineCount : (baselineMax ? 1 : 0)) - newCount;
-        const deletedCount = effectiveDeleted > 0 ? effectiveDeleted : 1;
-        const deletedTime = new Date().toLocaleString('en-US', {
-          month: 'short',
-          day: 'numeric',
-          year: 'numeric',
-          hour: 'numeric',
-          minute: '2-digit',
-          hour12: true,
-        });
-        setDeletionMessage(`${deletedCount} item${deletedCount > 1 ? 's' : ''} deleted from the sheet at ${deletedTime}.`);
+        // Show the deletion message only once per baseline. Use a stable key saved in localStorage
+        // so subsequent clicks don't re-show the same deletion notice.
+        const baselineKey = baselineCount !== null ? `count:${baselineCount}` : baselineMax ? `max:${baselineMax}` : null;
+        const notifiedFor = baselineKey ? localStorage.getItem('feedbackDeletionNotified') : null;
+        if (baselineKey && notifiedFor === baselineKey) {
+          // already notified for this baseline, skip showing again
+        } else {
+          const effectiveDeleted = (baselineCount !== null ? baselineCount : (baselineMax ? 1 : 0)) - newCount;
+          const deletedCount = effectiveDeleted > 0 ? effectiveDeleted : 1;
+          const deletedTime = new Date().toLocaleString('en-US', {
+            month: 'short',
+            day: 'numeric',
+            year: 'numeric',
+            hour: 'numeric',
+            minute: '2-digit',
+            hour12: true,
+          });
+          setDeletionMessage(`${deletedCount} item${deletedCount > 1 ? 's' : ''} deleted from the sheet at ${deletedTime}.`);
+          if (baselineKey) localStorage.setItem('feedbackDeletionNotified', baselineKey);
+        }
       }
       
       setFeedbackItems(newItems);

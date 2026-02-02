@@ -40,6 +40,26 @@ export default function EarlyAccessForm() {
       setShowModal(true);
       if (result.success) {
         formRef.current?.reset();
+        // Refresh stored feedback baseline so subsequent deletion detection works
+        try {
+          const r = await fetch('/api/feedback', { cache: 'no-store' });
+          if (r.ok) {
+            const payload = await r.json();
+            const items = payload.items ?? [];
+            const count = items.length;
+            const max = items.reduce((acc: string | null, it: { timestamp: string }) => {
+              if (!it?.timestamp) return acc;
+              if (!acc) return it.timestamp;
+              return acc > it.timestamp ? acc : it.timestamp;
+            }, null as string | null);
+            localStorage.setItem('feedbackCount', count.toString());
+            if (max) localStorage.setItem('feedbackMaxTimestamp', max);
+            // clear prior deletion-notified flag because baseline changed
+            localStorage.removeItem('feedbackDeletionNotified');
+          }
+        } catch (e) {
+          // ignore background errors
+        }
       }
     } catch (error) {
       setMessage('An error occurred. Please try again.');
